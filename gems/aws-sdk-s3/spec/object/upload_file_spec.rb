@@ -168,6 +168,70 @@ module Aws
             object.upload_file(one_hundred_seventeen_meg_file, content_type: 'text/plain')
           end
 
+          context 'specifying a custom multipart part size for the upload' do
+            let(:ten_megabytes) { 10 * 1024 * 1024 }
+
+            it 'supports a custom multipart_part_size option' do
+              client.stub_responses(:create_multipart_upload, upload_id: 'id')
+              client.stub_responses(:upload_part, etag: 'etag')
+              expect(client).to receive(:complete_multipart_upload).with(
+                bucket: 'bucket',
+                key: 'key',
+                upload_id: 'id',
+                multipart_upload: {
+                  parts: [
+                    { etag: 'etag', part_number: 1 },
+                    { etag: 'etag', part_number: 2 },
+                    { etag: 'etag', part_number: 3 },
+                    { etag: 'etag', part_number: 4 },
+                    { etag: 'etag', part_number: 5 },
+                    { etag: 'etag', part_number: 6 },
+                    { etag: 'etag', part_number: 7 },
+                    { etag: 'etag', part_number: 8 },
+                    { etag: 'etag', part_number: 9 },
+                    { etag: 'etag', part_number: 10 },
+                    { etag: 'etag', part_number: 11 },
+                    { etag: 'etag', part_number: 12 }
+                  ]
+                }
+              )
+              ten_megabytes = 10 * 1024 * 1024
+              object.upload_file(one_hundred_seventeen_meg_file, multipart_part_size: ten_megabytes, content_type: 'text/plain')
+            end
+
+            it 'raises an ArgumentError if a given custom multipart_part_size would result in too many parts' do
+              num_parts = Aws::S3::MultipartFileUploader::MAX_PARTS + 1
+              part_size = (one_hundred_seventeen_meg_file.size.to_f / num_parts).ceil
+              client.stub_responses(:create_multipart_upload, upload_id: 'id')
+              client.stub_responses(:upload_part, etag: 'etag')
+              expect {
+                object.upload_file(one_hundred_seventeen_meg_file, multipart_part_size: part_size, content_type: 'text/plain')
+              }.to raise_error(
+                ArgumentError,
+                ':multipart_part_size must be a larger value because the current value would result in '\
+                "#{num_parts} parts, which is greater than the allowed #{Aws::S3::MultipartFileUploader::MAX_PARTS} parts"
+              )
+            end
+
+            it 'raises an ArgumentError if a given custom multipart_part_size is too small' do
+              min_part_size = Aws::S3::MultipartFileUploader::MIN_PART_SIZE
+              client.stub_responses(:create_multipart_upload, upload_id: 'id')
+              client.stub_responses(:upload_part, etag: 'etag')
+              expect {
+                object.upload_file(one_hundred_seventeen_meg_file, multipart_part_size: min_part_size - 1, content_type: 'text/plain')
+              }.to raise_error(ArgumentError, ":multipart_part_size must be greater than or equal to #{min_part_size} bytes")
+            end
+
+            it 'raises an ArgumentError if a given custom multipart_part_size is too large' do
+              max_part_size = Aws::S3::MultipartFileUploader::MAX_PART_SIZE
+              client.stub_responses(:create_multipart_upload, upload_id: 'id')
+              client.stub_responses(:upload_part, etag: 'etag')
+              expect {
+                object.upload_file(one_hundred_seventeen_meg_file, multipart_part_size: max_part_size + 1, content_type: 'text/plain')
+              }.to raise_error(ArgumentError, ":multipart_part_size must be less than or equal to #{max_part_size} bytes")
+            end
+          end
+
           it 'reports progress for multipart uploads' do
             thread = double(value: nil)
             allow(Thread).to receive(:new).and_yield.and_return(thread)

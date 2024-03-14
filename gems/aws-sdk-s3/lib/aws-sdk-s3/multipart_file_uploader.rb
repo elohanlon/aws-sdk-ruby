@@ -8,7 +8,9 @@ module Aws
     # @api private
     class MultipartFileUploader
 
+      # For part size limits, see: https://docs.aws.amazon.com/AmazonS3/latest/userguide/qfacts.html
       MIN_PART_SIZE = 5 * 1024 * 1024 # 5MB
+      MAX_PART_SIZE = 5 * 1024 * 1024 * 1024 # 5GB
 
       FILE_TOO_SMALL = "unable to multipart upload files smaller than 5MB"
 
@@ -99,9 +101,27 @@ module Aws
         raise MultipartUploadError.new(msg, errors + [error])
       end
 
+      def validate_multipart_part_size!(multipart_part_size, whole_file_size)
+        num_parts = (whole_file_size.to_f / multipart_part_size).ceil
+        if num_parts > MAX_PARTS
+          raise ArgumentError,
+                ':multipart_part_size must be a larger value because the current value would '\
+                "result in #{num_parts} parts, which is greater than the allowed #{MAX_PARTS} parts"
+        end
+
+        if multipart_part_size < MIN_PART_SIZE
+          raise ArgumentError,
+                ":multipart_part_size must be greater than or equal to #{MIN_PART_SIZE} bytes"
+        elsif multipart_part_size > MAX_PART_SIZE
+          raise ArgumentError,
+          ":multipart_part_size must be less than or equal to #{MAX_PART_SIZE} bytes"
+        end
+      end
+
       def compute_parts(upload_id, source, options)
         size = File.size(source)
-        default_part_size = compute_default_part_size(size)
+        multipart_part_size = options.fetch(:multipart_part_size, compute_default_part_size(size))
+        validate_multipart_part_size!(multipart_part_size, size)
         offset = 0
         part_number = 1
         parts = []
@@ -112,11 +132,11 @@ module Aws
             body: FilePart.new(
               source: source,
               offset: offset,
-              size: part_size(size, default_part_size, offset)
+              size: part_size(size, multipart_part_size, offset)
             )
           )
           part_number += 1
-          offset += default_part_size
+          offset += multipart_part_size
         end
         parts
       end

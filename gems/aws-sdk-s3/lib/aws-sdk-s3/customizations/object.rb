@@ -446,6 +446,12 @@ module Aws
       #   multipart APIs.
       #   Default threshold is 100MB.
       #
+      # @option options [Integer] :multipart_part_size
+      #   The part size to use when performing a multipart upload.  Must be
+      #   >= 5 megabytes and <= 5 gigabytes.  If no value is specified for this
+      #   option, the value will be dynamically determined based on
+      #   the whole size of the file being uploaded.
+      #
       # @option options [Integer] :thread_count (10) The number of parallel
       #   multipart uploads. This option is not used if the file is smaller than
       #   `:multipart_threshold`.
